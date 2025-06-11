@@ -10,7 +10,7 @@
     cd pptx-fract-num
     ```
 
-2.  **Создайте виртуальное окружение (рекомендуется):**
+2.  **Создайте виртуальное окружение:**
     ```powershell
     python -m venv venv
     venv\Scripts\activate
