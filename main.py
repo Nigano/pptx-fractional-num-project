@@ -3,7 +3,7 @@ from pptx.enum.shapes import *
 from pptx import *
 
 
-def fractional_in_text_checker(some_text: str):
+def fractional_in_text_checker(some_text: str) -> str:
     """
     Функция для извлечения дробных чисел из входной строки.
     :param some_text: Входная строка.
@@ -15,21 +15,17 @@ def fractional_in_text_checker(some_text: str):
     fractional_numbers = ''
     for word in normalized_text:
         try:
-            if not type(word) is float:
-                if len(word) == 1:
-                    if ord(word) == 188 or ord(word) == 189 or ord(word) == 190:
-                        fractional_numbers += word + "\n"
-                else:
-                    float(word)
-                    if "." in word:
-                        fractional_numbers += (some_text_copy[j]) + "\n"
+            if len(word) == 1:
+                if ord(word) in [188, 189, 190]:
+                    fractional_numbers += word + "\n"
             else:
-                fractional_numbers += (some_text_copy[j]) + "\n"
+                float(word)
+                if "." in word:
+                    fractional_numbers += (some_text_copy[j]) + "\n"
         except ValueError:
             pass
         j += 1
-    if type(fractional_numbers) is not None:
-        return fractional_numbers
+    return fractional_numbers
 
 
 def chart_handler(chart_shape):
