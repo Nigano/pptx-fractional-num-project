@@ -1,38 +1,26 @@
+import re
 import pptx.exc
 from pptx.enum.shapes import *
 from pptx import *
 
 
-def fractional_in_text_checker(some_text: str) -> str:
+def fractional_in_text_checker(text: str) -> list[str]:
     """
-    Функция для извлечения дробных чисел из входной строки.
-    :param some_text: Входная строка.
-    :return: Строку с дробными числами, записанными через \n, если таковые имеются.
+    Функция для поиска дробных чисел в тексте.
+    :param text: Входной текст.
+    :return: Список, содержащий все дробные числа из текста.
     """
-    some_text_copy = some_text.split()
-    normalized_text = some_text.replace(",", ".").replace("/", ".").split()
-    j = 0
-    fractional_numbers = ''
-    for word in normalized_text:
-        try:
-            if len(word) == 1:
-                if ord(word) in [188, 189, 190]:
-                    fractional_numbers += word + "\n"
-            else:
-                float(word)
-                if "." in word:
-                    fractional_numbers += (some_text_copy[j]) + "\n"
-        except ValueError:
-            pass
-        j += 1
-    return fractional_numbers
+    special_fraction_symbols = "¼½¾"
+    pattern = re.compile(r'(?<![\d.,-])-?(?:\d+[,.]\d+|\d+/\d+|[¼½¾])(?!\.\d)(?!,\d)(?!\d)')
+    numbers = pattern.findall(text.replace(",", "."))
+    return [num for num in numbers if not num.endswith((".0", ",0")) or num in special_fraction_symbols]
 
 
-def chart_handler(chart_shape):
+def chart_handler(chart_shape: MSO_SHAPE_TYPE.CHART) -> str:
     """
-    Функция для извлечения информации из диаграмм.
-    :param chart_shape: Объект Shape, пренадлежащий MSO_SHAPE_TYPE.CHART и представляющий собой диаграмму.
-    :return: Строку, содержащую все значения, присутствующие на диаграмме.
+    Функция для извлечения текста из диаграммы.
+    :param chart_shape: Объект, представляющий диаграмму.
+    :return: Строка со значениями всех полей диаграммы
     """
     text = ''
     for series in chart_shape.chart.series:
@@ -41,11 +29,11 @@ def chart_handler(chart_shape):
     return text
 
 
-def table_handler(table_shape):
+def table_handler(table_shape: MSO_SHAPE_TYPE.TABLE) -> str:
     """
-    Функция для извлечения информации из таблиц.
-    :param table_shape: Объект Shape, пренадлежащий MSO_SHAPE_TYPE.TABLE и представляющий собой таблицу.
-    :return: Строку, содержащую все значения, присутствующие в таблице.
+    Функция для извлечения текста из таблицы.
+    :param table_shape: Объект, представляющий таблицу.
+    :return: Строка со значениями всех ячеек таблицы
     """
     text = ''
     for row in table_shape.table.rows:
@@ -54,59 +42,74 @@ def table_handler(table_shape):
     return text
 
 
-def slide_processing(slide, slide_number):
+def slide_processing(slide: Presentation().slides, slide_number: int) -> list[int | list[str]]:
     """
-    Функция для обработки слайдов .pptx презентации и извлечения инфорамции из них.
-    :param slide: Объект Slide, представляющий собой слайд
-    :param slide_number: Целое число, отражающее номер обрабатываемого слайда
-    :return: Выводит в консоль номера всех слайдов, где встречаются дробные числа,
-    а также сами числа, по одному в строке.
+    Обрабатывает один слайд, извлекая из него дробные числа.
+    :param slide: Объект слайда.
+    :param slide_number: Номер слайда.
+    :return: Список, содержащий номер слайда и список дробных чисел.
     """
-    fractional_numbers = ''
+    all_num = []
     for shape in slide.shapes:
         try:
             if shape.has_text_frame:
                 numbers = fractional_in_text_checker(shape.text)
                 if numbers:
-                    fractional_numbers += numbers
+                    all_num += numbers
             else:
                 match shape.shape_type:
                     case MSO_SHAPE_TYPE.TABLE:
                         numbers = fractional_in_text_checker(table_handler(shape))
                         if numbers:
-                            fractional_numbers += numbers
+                            all_num += numbers
                     case MSO_SHAPE_TYPE.CHART:
                         numbers = fractional_in_text_checker(chart_handler(shape))
                         if numbers:
-                            fractional_numbers += numbers
+                            all_num += numbers
                     case _:
-                        pass
+                        continue
         except Exception as err:
             print(f"Ошибка обработчика слайдов: {err}")
-
-    if len(fractional_numbers) > 0:
-        print(f"Слайд номер {slide_number}\n" + fractional_numbers)
-        return True
+    fractional_numbers = [slide_number, all_num]
+    return fractional_numbers
 
 
-if __name__ == '__main__':
+def search_for_fractional_numbers_in_pptx(path_to_pptx: str) -> dict[int: str]:
+    """
+    Функция для поиска дробных чисел по всей презентации.
+    :param path_to_pptx: Путь к файлу .pptx.
+    :return: Словарь, где ключ - номер слайда, значение - список дробных чисел, или {}, если ничего не найдено.
+    """
     try:
-        path = input("Введите путь до .pptx презентации: ")
-        if not (path.endswith(".pptx")):
-            path += ".pptx"
+        if not (path_to_pptx.endswith(".pptx")):
+            path_to_pptx += ".pptx"
         try:
-            prs = Presentation(path)
-            slide_number = 1
-            are_there_fractionals = ''
+            all_fractional_numbers_from_pptx = {}
+            prs = Presentation(path_to_pptx)
+            slide_number = 0
             for slide in prs.slides:
-                are_there_fractionals += str(slide_processing(slide, slide_number))
                 slide_number += 1
-            if not ("True" in are_there_fractionals):
+                from_slide_fractnum = slide_processing(slide, slide_number)
+                if len(from_slide_fractnum[1]) > 0:
+                    all_fractional_numbers_from_pptx[from_slide_fractnum[0]] = from_slide_fractnum[1]
+            if not all_fractional_numbers_from_pptx:
                 print("Дробных чисел в презентации не найдено")
-
+                return {}
+            return all_fractional_numbers_from_pptx
         except pptx.exc.PackageNotFoundError:
             print(
                 "По указанному пути презентации .pptx не найдено.\nПроверьте правильность указания ссылки и тип файла")
+            return {}
 
     except Exception as e:
         print(f"Произошла непредвиденная ошибка: {e}")
+        return {}
+
+
+if __name__ == '__main__':
+    path = input("Введите путь до .pptx презентации: ")
+    result = search_for_fractional_numbers_in_pptx(path)
+    for slide_number, numbers in result.items():
+        print(f"\nСлайд номер {slide_number}:")
+        for number in numbers:
+            print(number)
